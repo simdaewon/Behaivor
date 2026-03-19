@@ -1,0 +1,76 @@
+import os
+import deeplabcut
+import glob
+import tensorflow as tf
+
+print("DeepLabCut 버전:", deeplabcut.__version__)
+print("TensorFlow 버전:", tf.__version__)
+print("사용 가능한 GPU 목록:", tf.config.list_physical_devices('GPU'))
+
+task = 'beam_balance_rear'
+experimenter = 'won'
+
+video_dir = '/mnt/c/Users/User/Desktop/behavior/DLC_Training_Videos'
+
+video_path = glob.glob(os.path.join(video_dir, '*.mp4'))
+
+print(f"\n[데이터 로드 확인] 총 {len(video_path)}개의 영상이 인식되었습니다.")
+for vid in video_path:
+    print(f" - {vid}")
+if len(video_path) == 0:
+    raise ValueError("지정된 경로에서 mp4 파일을 찾을 수 없습니다. 경로를 다시 확인하십시오.")
+
+config_path = deeplabcut.create_new_project(task, experimenter, video_path, copy_videos=True)
+
+print("\n프로젝트 생성 완료! 설정 파일(config.yaml) 경로:", config_path)
+
+config_path = '/home/won/beam_balance_rear-won-2026-03-06/config.yaml'
+
+deeplabcut.extract_frames(config_path, mode='automatic', algo='kmeans', userfeedback=False)
+
+deeplabcut.label_frames(config_path)
+
+deeplabcut.check_labels(config_path)
+
+deeplabcut.create_training_dataset(config_path)
+
+config_path = '/home/won/beam_balance_rear-won-2026-03-06/config.yaml'
+
+deeplabcut.train_network(
+    config_path, 
+    shuffle=1, 
+    displayiters=500, 
+    saveiters=5000, 
+    maxiters=20000)
+
+deeplabcut.evaluate_network(config_path, plotting=True)
+
+
+##################################################################################
+##학습 데이터 추가 할때##
+
+config_path = '/home/won/beam_balance_rear-won-2026-03-06/config.yaml'
+
+new_videos = [
+    '/mnt/c/Users/User/Desktop/behavior/DLC_Training_Videos/new_video1.mp4',
+    '/mnt/c/Users/User/Desktop/behavior/DLC_Training_Videos/new_video2.mp4']
+
+deeplabcut.add_new_videos(config_path, new_videos, copy_videos=True)
+
+deeplabcut.extract_frames(config_path, mode='automatic', algo='kmeans', userfeedback=False)
+
+deeplabcut.label_frames(config_path)
+
+deeplabcut.check_labels(config_path)
+
+# 새로운 training dataset 생성! (기존 폴더 구조를 해치지 않고 새 버전을 만들어줍니다)
+deeplabcut.create_training_dataset(config_path)
+
+
+#추가된 학습 데이터로 모델 재학습
+deeplabcut.train_network(
+    config_path, 
+    shuffle=1, 
+    displayiters=500, 
+    saveiters=5000, 
+    maxiters=20000)
