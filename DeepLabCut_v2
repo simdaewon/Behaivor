@@ -1,0 +1,317 @@
+import os
+import deeplabcut
+import glob
+import tensorflow as tf
+
+config_path = '/home/won/beam_balance_rear-won-2026-03-16/config.yaml'
+video_path = '/home/won/beam_balance_rear-won-2026-03-16/videos/00279.mp4'
+
+deeplabcut.extract_outlier_frames(config_path, 
+                                  video_path, 
+                                  outlieralgorithm='uncertain', 
+                                  p_bound=0.8)
+
+deeplabcut.refine_labels(config_path)
+
+deeplabcut.merge_datasets(config_path)
+
+deeplabcut.create_training_dataset(config_path)
+
+deeplabcut.train_network(
+    config_path, 
+    shuffle=1, 
+    displayiters=500, 
+    saveiters=5000, 
+    maxiters=20000)
+
+deeplabcut.evaluate_network(config_path, plotting=True)
+
+v2_folder = '/home/won/beam_balance_rear-won-2026-03-16/videos/results_v2'
+os.makedirs(v2_folder, exist_ok=True)
+
+deeplabcut.analyze_videos(config_path, 
+                          video_path, 
+                          videotype='.mp4', 
+                          save_as_csv=True,
+                          destfolder=v2_folder)
+
+video_path = '/home/won/beam_balance_rear-won-2026-03-16/videos/00280.mp4'
+
+deeplabcut.plot_trajectories(config_path, 
+                             video_path, 
+                             videotype='.mp4', 
+                             destfolder=v2_folder)
+
+deeplabcut.create_labeled_video(config_path, 
+                                video_path, 
+                                videotype='.mp4',
+                                destfolder=v2_folder)
+
+######################################################################################
+import pandas as pd
+import matplotlib.pyplot as plt
+import os
+
+file_path = '/home/won/beam_balance_rear-won-2026-03-16/videos/results_v2/Hetero 1DLC_resnet50_beam_balance_rearMar16shuffle1_20000.csv'
+
+save_dir = '/home/won/beam_balance_rear-won-2026-03-16/figure'
+os.makedirs(save_dir, exist_ok=True)
+save_filename = os.path.join(save_dir, 'Hetero 1_v2_raw_coordinates.png') # 이름에 v2 추가!
+
+df = pd.read_csv(file_path, header=[0, 1, 2], index_col=0)
+df.columns = df.columns.droplevel(0)
+
+plt.figure(figsize=(15, 6))
+
+plt.plot(df.index, df[('left', 'y')], label='Left Paw (Y-axis)', color='blue', alpha=0.8)
+plt.plot(df.index, df[('right', 'y')], label='Right Paw (Y-axis)', color='red', alpha=0.8)
+
+plt.title('Paw Y-Coordinates Over Time - V2 Refined', fontsize=15)
+plt.xlabel('Frame Number (Time)', fontsize=12)
+plt.ylabel('Y Coordinate (Pixel)', fontsize=12)
+
+plt.gca().invert_yaxis() 
+
+plt.legend()
+plt.grid(True, linestyle='--', alpha=0.6)
+
+plt.savefig(save_filename, dpi=300, bbox_inches='tight')
+print(f"🎉 성공! 똑똑해진 V2 그래프가 '{save_filename}'에 저장되었습니다.")
+
+# 화면에도 띄우기
+plt.show()
+
+#######################################################################################
+
+import pandas as pd
+import matplotlib.pyplot as plt
+import numpy as np
+import os
+from sklearn.metrics import r2_score # R-squared 계산용
+
+file_path = '/home/won/beam_balance_rear-won-2026-03-16/videos/results_v2/Hetero 1DLC_resnet50_beam_balance_rearMar16shuffle1_20000.csv'
+
+save_dir = '/home/won/beam_balance_rear-won-2026-03-16/figure'
+os.makedirs(save_dir, exist_ok=True)
+save_filename = os.path.join(save_dir, 'Hetero 1_Scatter_with_Stats.png')
+
+df = pd.read_csv(file_path, header=[0, 1, 2], index_col=0)
+df.columns = df.columns.droplevel(0)
+
+p_cutoff = 0.6 
+ci_margin = 50
+
+plt.figure(figsize=(11, 8))
+
+for paw, color, line_color in [('left', 'blueviolet', 'darkblue'), ('right', 'red', 'darkred')]:
+    valid = df[(paw, 'likelihood')] > p_cutoff
+    x = df.loc[valid, (paw, 'x')].dropna().values
+    y = df.loc[valid, (paw, 'y')].dropna().values
+    
+    # ① 선형 회귀 및 R-squared 계산
+    slope, intercept = np.polyfit(x, y, 1)
+    y_pred = slope * x + intercept
+    r_squared = r2_score(y, y_pred) # 결정계수 계산
+    
+    # 추세선 그리기용 데이터
+    line_x = np.linspace(x.min(), x.max(), 100)
+    line_y = slope * line_x + intercept
+    
+    # ② 그래프 그리기
+    # 범례에 R² 값을 포함시킵니다.
+    label_txt = f'{paw} (Slope: {slope:.2f}, $R^2$: {r_squared:.3f})'
+    
+    plt.fill_between(line_x, line_y - ci_margin, line_y + ci_margin, 
+                     color=color, alpha=0.15, label=f'{paw} CI ($\pm${ci_margin}px)')
+    
+    plt.plot(line_x, line_y, color=line_color, linewidth=2, linestyle='--', label=f'{paw} Trend')
+    
+    plt.scatter(x, y, color=color, s=15, alpha=0.6, label=label_txt)
+
+plt.xlabel('X position (pixels)', fontsize=12)
+plt.ylabel('Y position (pixels)', fontsize=12)
+plt.ylim(1000, 300)
+
+plt.legend(bbox_to_anchor=(1.02, 1), loc='upper left', fontsize=10)
+plt.title('Hetero: Paw Trajectory Analysis', fontsize=15)
+
+plt.tight_layout()
+plt.savefig(save_filename, dpi=300, bbox_inches='tight')
+print(f"✅ 통계 수치가 포함된 그래프가 저장되었습니다: {save_filename}")
+plt.show()
+
+#####################################################################################
+
+import pandas as pd
+import numpy as np
+
+file_path = '/home/won/beam_balance_rear-won-2026-03-16/videos/results_v2/00280DLC_resnet50_beam_balance_rearMar16shuffle1_20000.csv'
+
+df = pd.read_csv(file_path, header=[0, 1, 2], index_col=0)
+df.columns = df.columns.droplevel(0)
+
+# ---------------------------------------------------------
+p_cutoff = 0.3
+slip_margin = 50       # 쥐의 실시간 보행 궤적보다 '50px' 이상 밑으로 떨어지면 Slip!
+min_frames = 2         # 최소 2프레임(0.1초) 이상 유지되어야 인정
+window_size = 30       # 실시간 기준선을 만들 때 참고할 앞뒤 프레임 수 (30프레임 = 약 1초)
+# ---------------------------------------------------------
+
+print(f"🔍 [Rolling Baseline 기반 Slip 분석 결과]")
+print(f"기준 1: 실시간 예상 궤적보다 {slip_margin}px 이상 하락 시")
+print(f"기준 2: 보행 중 포인트 소실 시 (완전 빠짐)\n")
+
+total_slips = 0
+
+active_frames = df[(df[('left', 'likelihood')] > p_cutoff) | (df[('right', 'likelihood')] > p_cutoff)].index
+
+if len(active_frames) > 0:
+    start_frame = active_frames[0]
+    end_frame = active_frames[-1]
+    walk_df = df.loc[start_frame:end_frame].copy()
+    
+    for paw in ['left', 'right']:
+        y_raw = walk_df[(paw, 'y')].copy()
+        likelihood = walk_df[(paw, 'likelihood')].copy()
+        
+        # 1. 신뢰할 수 없는 점(완전히 빠진 점)을 빈칸(NaN)으로 만들기
+        y_trusted = y_raw.copy()
+        y_trusted[likelihood <= p_cutoff] = np.nan
+        
+        # 2. 빈칸을 앞뒤 데이터를 보고 자연스럽게 이어주기 (Interpolation)
+        y_interp = y_trusted.interpolate(method='linear', limit_direction='both')
+        
+        # 3. [핵심] 1초 단위로 평균적인 걷기 높이(가상의 빔) 계산하기
+        # 쥐가 앞으로 전진함에 따라 기준선(y_baseline)도 자연스럽게 변화합니다.
+        y_baseline = y_interp.rolling(window=window_size, center=True, min_periods=1).median()
+        
+        # [조건 1] 찍힌 점 중에서, 가상 빔보다 밑으로 훅 떨어진 경우
+        cond1_visible = (likelihood > p_cutoff) & (y_raw > (y_baseline + slip_margin))
+        
+        # [조건 2] 걷는 와중에 발이 안 찍힌 경우 (빔 밑으로 가려짐)
+        cond2_invisible = (likelihood <= p_cutoff)
+        
+        is_slip = cond1_visible | cond2_invisible
+        
+        # 연속 프레임 묶기
+        blocks = (is_slip != is_slip.shift(1)).cumsum()
+        slip_events = is_slip.groupby(blocks).sum()
+        
+        # 실제 횟수 카운트
+        actual_slip_count = (slip_events >= min_frames).sum()
+        total_slips += actual_slip_count
+        
+        print(f"🐾 {paw.capitalize()} Paw (발): {actual_slip_count} 회")
+
+else:
+    print("❌ 화면에 쥐가 인식된 프레임이 없습니다.")
+
+print("-" * 45)
+print(f"총 Slip 횟수 (Left + Right): {total_slips} 회")
+
+#######################################################################################
+
+import pandas as pd
+
+file_path = '/home/won/beam_balance_rear-won-2026-03-16/videos/results_v2/00250DLC_resnet50_beam_balance_rearMar16shuffle1_20000.csv'
+
+df = pd.read_csv(file_path, header=[0, 1, 2], index_col=0)
+df.columns = df.columns.droplevel(0)
+
+
+fps = 30              # 영상의 초당 프레임 수
+start_line_y = 800    # 타이머 시작 기준선
+end_line_y = 550      # 타이머 종료 기준선
+window_size = 30      # 노이즈 제거용 필터 크기 (30프레임 = 0.1초)
+
+y_mean = df[[('left', 'y'), ('right', 'y')]].mean(axis=1)
+
+y_smooth = y_mean.rolling(window=window_size, center=True, min_periods=1).median()
+
+# 3. 부드러워진 궤적을 바탕으로 출발선/도착선 통과 지점 찾기
+start_frames = y_smooth[y_smooth <= start_line_y].index
+end_frames = y_smooth[y_smooth <= end_line_y].index
+
+if len(start_frames) > 0 and len(end_frames) > 0:
+    start_frame = start_frames[0]
+    
+    # 도착 프레임은 반드시 출발 프레임 이후여야 함
+    valid_end_frames = end_frames[end_frames > start_frame]
+    
+    if len(valid_end_frames) > 0:
+        end_frame = valid_end_frames[0]
+        
+        # 총 소요 프레임 및 시간 계산
+        total_frames = end_frame - start_frame
+        traverse_time = total_frames / fps
+        
+        print("📊 [빔 밸런스 도착 시간 분석 결과]")
+        print(f"▶ 출발선 (Y={start_line_y}) 통과 프레임: {start_frame}")
+        print(f"▶ 도착선 (Y={end_line_y}) 통과 프레임: {end_frame}")
+        print(f"▶ 총 이동 프레임: {total_frames} frames")
+        print("-" * 30)
+        print(f"⏱️ 최종 구간(800->550) 통과 소요 시간: {traverse_time:.2f} 초")
+    else:
+        print("❌ 쥐가 출발선은 넘었으나 도착선(Y=410)을 완전히 통과하지 못했습니다.")
+else:
+    print("❌ 쥐가 출발선(Y=800)을 넘지 않았거나 화면에 인식되지 않았습니다.")
+
+###################################################################################
+
+import pandas as pd
+import matplotlib.pyplot as plt
+import os
+
+file_path = '/home/won/beam_balance_rear-won-2026-03-16/videos/results_v2/00249DLC_resnet50_beam_balance_rearMar16shuffle1_20000.csv'
+
+save_dir = '/home/won/beam_balance_rear-won-2026-03-16/figure'
+os.makedirs(save_dir, exist_ok=True)
+save_filename = os.path.join(save_dir, '00249_v2_paw_gap_area.png') # 이름 변경
+
+df = pd.read_csv(file_path, header=[0, 1, 2], index_col=0)
+df.columns = df.columns.droplevel(0)
+df = df.iloc[40:]
+left_y = df[('left', 'y')]
+right_y = df[('right', 'y')]
+
+
+y_gap = abs(left_y - right_y)
+
+# 통계량 계산 (결측치 제외)
+avg_gap = y_gap.mean()         # 평균 너비
+max_gap = y_gap.max()          # 가장 크게 벌어진 너비
+total_area = y_gap.sum()       # 두 선 사이 공간의 총합 (총 면적)
+
+print("📊 [양발 Y좌표 궤적 간격(공간) 계산 결과]")
+print(f"▶ 평균 간격: {avg_gap:.2f} px")
+print(f"▶ 최대 간격: {max_gap:.2f} px")
+print(f"▶ 두 선 사이 공간의 총합(Area): {total_area:.2f}")
+print("-" * 40)
+
+plt.figure(figsize=(15, 6))
+
+plt.plot(df.index, left_y, label='Left Paw (Y-axis)', color='blue', alpha=0.8)
+plt.plot(df.index, right_y, label='Right Paw (Y-axis)', color='red', alpha=0.8)
+
+plt.fill_between(df.index, left_y, right_y, color='green', alpha=0.2, label='Space between Paws')
+
+plt.title('Hetero Paw Y-Coordinates Over Time - Gap Area', fontsize=15)
+plt.xlabel('Frame Number (Time)', fontsize=12)
+plt.ylabel('Y Coordinate (Pixel)', fontsize=12)
+
+plt.gca().invert_yaxis() 
+
+plt.legend()
+plt.grid(True, linestyle='--', alpha=0.6)
+
+plt.savefig(save_filename, dpi=300, bbox_inches='tight')
+print(f"🎉 성공! 두 선 사이의 공간이 색칠된 그래프가 '{save_filename}'에 저장되었습니다.")
+
+# 화면에도 띄우기
+plt.show()
+
+##################################################################################
+
+
+
+
