@@ -76,9 +76,7 @@ plt.legend()
 plt.grid(True, linestyle='--', alpha=0.6)
 
 plt.savefig(save_filename, dpi=300, bbox_inches='tight')
-print(f"🎉 성공! 똑똑해진 V2 그래프가 '{save_filename}'에 저장되었습니다.")
 
-# 화면에도 띄우기
 plt.show()
 
 #######################################################################################
@@ -118,7 +116,7 @@ for paw, color, line_color in [('left', 'blueviolet', 'darkblue'), ('right', 're
     line_y = slope * line_x + intercept
     
     # ② 그래프 그리기
-    # 범례에 R² 값을 포함시킵니다.
+    # 범례에 R² 값을 포함.
     label_txt = f'{paw} (Slope: {slope:.2f}, $R^2$: {r_squared:.3f})'
     
     plt.fill_between(line_x, line_y - ci_margin, line_y + ci_margin, 
@@ -137,7 +135,7 @@ plt.title('Hetero: Paw Trajectory Analysis', fontsize=15)
 
 plt.tight_layout()
 plt.savefig(save_filename, dpi=300, bbox_inches='tight')
-print(f"✅ 통계 수치가 포함된 그래프가 저장되었습니다: {save_filename}")
+print(f"✅ 통계 수치가 포함된 그래프가 저장: {save_filename}")
 plt.show()
 
 #####################################################################################
@@ -204,7 +202,7 @@ if len(active_frames) > 0:
         print(f"🐾 {paw.capitalize()} Paw (발): {actual_slip_count} 회")
 
 else:
-    print("❌ 화면에 쥐가 인식된 프레임이 없습니다.")
+    print("❌ 화면에 쥐가 인식된 프레임이 없음.")
 
 print("-" * 45)
 print(f"총 Slip 횟수 (Left + Right): {total_slips} 회")
@@ -252,9 +250,9 @@ if len(start_frames) > 0 and len(end_frames) > 0:
         print("-" * 30)
         print(f"⏱️ 최종 구간(800->550) 통과 소요 시간: {traverse_time:.2f} 초")
     else:
-        print("❌ 쥐가 출발선은 넘었으나 도착선(Y=410)을 완전히 통과하지 못했습니다.")
+        print("❌ 쥐가 출발선은 넘었으나 도착선(Y=410)을 완전히 통과하지 못했음.")
 else:
-    print("❌ 쥐가 출발선(Y=800)을 넘지 않았거나 화면에 인식되지 않았습니다.")
+    print("❌ 쥐가 출발선(Y=800)을 넘지 않았거나 화면에 인식되지 않았음.")
 
 ###################################################################################
 
@@ -305,9 +303,8 @@ plt.legend()
 plt.grid(True, linestyle='--', alpha=0.6)
 
 plt.savefig(save_filename, dpi=300, bbox_inches='tight')
-print(f"🎉 성공! 두 선 사이의 공간이 색칠된 그래프가 '{save_filename}'에 저장되었습니다.")
+print(f"🎉 두 선 사이의 공간이 색칠된 그래프가 '{save_filename}'에 저장.")
 
-# 화면에도 띄우기
 plt.show()
 
 ##################################################################################
